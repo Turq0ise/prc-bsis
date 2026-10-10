@@ -14,6 +14,7 @@ import {
     User as UserIcon,
     Loader2,
     X,
+    Activity,
 } from "lucide-react";
 
 export default function DonorDashboard() {
@@ -37,7 +38,7 @@ export default function DonorDashboard() {
         gallonerTier: "None",
     });
 
-    const [activeRequest, setActiveRequest] = useState({ hasActive: false });
+    const [activeRequests, setActiveRequests] = useState([]);
     const [upcomingAppointments, setUpcomingAppointments] = useState([]);
 
     // Date Formatting Helpers
@@ -79,7 +80,7 @@ export default function DonorDashboard() {
                 if (units && units.length > 0) {
                     const days = getDaysSince(units[0].collection_date);
                     setDonationStats({
-                        isEligible: days >= 90, // Eligible if >= 90 days since last donation
+                        isEligible: days >= 90,
                         daysSinceLast: days,
                         totalUnits: units.length,
                         gallonerTier: units.length >= 4 ? "Bronze" : "None",
@@ -96,33 +97,44 @@ export default function DonorDashboard() {
 
                 setUpcomingAppointments(appts || []);
 
-                // 3. Fetch Active Requisition
-                const { data: req } = await supabase
+                // 3. Fetch Active Requisitions (Array instead of single)
+                const { data: reqs } = await supabase
                     .from("requisitions")
                     .select("*")
                     .eq("target_donor_id", profile.id)
-                    .neq("status", "completed")
-                    .maybeSingle();
 
-                if (req) {
-                    // Fetch physician name manually to avoid complex FK routing in prototype
-                    const { data: phys } = await supabase
+                if (reqs && reqs.length > 0) {
+                    // Fetch physician names manually to avoid complex FK routing in prototype
+                    const physIds = [
+                        ...new Set(
+                            reqs.map((r) => r.physician_id).filter(Boolean),
+                        ),
+                    ];
+
+                    const { data: physData } = await supabase
                         .from("profiles")
-                        .select("full_name")
-                        .eq("id", req.physician_id)
-                        .maybeSingle();
+                        .select("id, full_name")
+                        .in("id", physIds);
 
-                    setActiveRequest({
-                        hasActive: true,
-                        reqId: req.req_id,
-                        physician: phys
-                            ? `Dr. ${phys.full_name}`
-                            : "Attending Physician",
-                        hospital: req.hospital,
-                        component: req.component,
-                        branch: req.branch,
-                        status: req.status,
-                    });
+                    const physMap = {};
+                    if (physData) {
+                        physData.forEach((p) => (physMap[p.id] = p.full_name));
+                    }
+
+                    setActiveRequests(
+                        reqs.map((req) => ({
+                            id: req.id,
+                            reqId: req.req_id,
+                            physician:
+                                req.physician_id && physMap[req.physician_id]
+                                    ? `Dr. ${physMap[req.physician_id]}`
+                                    : "Attending Physician",
+                            hospital: req.hospital,
+                            component: req.component,
+                            branch: req.branch,
+                            status: req.status,
+                        })),
+                    );
                 }
             } catch (error) {
                 console.error("Error fetching dashboard data:", error);
@@ -135,15 +147,15 @@ export default function DonorDashboard() {
     }, [profile]);
 
     const getStatusLevel = (status) => {
-        const levels = {
-            submitted: 1,
-            verified: 2,
-            crossmatching: 3,
-            ready: 4,
-        };
-        return levels[status] || 0;
+        const normalized = status?.toLowerCase() || "";
+        if (normalized.includes("pending") || normalized.includes("submitted"))
+            return 1;
+        if (normalized.includes("verif")) return 2;
+        if (normalized.includes("crossmatch")) return 3;
+        if (normalized.includes("ready")) return 4;
+        if (normalized.includes("complet")) return 5;
+        return 0;
     };
-    const reqLevel = getStatusLevel(activeRequest?.status);
 
     if (loadingData) {
         return (
@@ -242,122 +254,138 @@ export default function DonorDashboard() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Main Content Area */}
                 <div className="lg:col-span-2 space-y-6">
-                    {/* Active Requisition Tracker */}
-                    {activeRequest.hasActive && (
-                        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
-                            <div className="flex justify-between items-center mb-4">
-                                <div className="flex items-center gap-2">
-                                    <div className="p-2 bg-red-100 text-prc-red rounded-lg">
-                                        <Stethoscope className="w-4 h-4" />
+                    {/* Active Requisition Tracker Array */}
+                    {activeRequests.length > 0 && (
+                        <div className="space-y-4">
+                            <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
+                                <Activity className="w-5 h-5 text-prc-red" />{" "}
+                                Active Medical Requests
+                            </h3>
+                            {activeRequests.map((req) => {
+                                const reqLevel = getStatusLevel(req.status);
+
+                                return (
+                                    <div
+                                        key={req.id}
+                                        className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm"
+                                    >
+                                        <div className="flex justify-between items-center mb-4">
+                                            <div className="flex items-center gap-2">
+                                                <div className="p-2 bg-red-100 text-prc-red rounded-lg">
+                                                    <Stethoscope className="w-4 h-4" />
+                                                </div>
+                                                <div>
+                                                    <h3 className="text-sm font-bold text-slate-900">
+                                                        Hospital Blood Request
+                                                        Filed for You
+                                                    </h3>
+                                                    <p className="text-[11px] text-slate-500">
+                                                        Initiated by your
+                                                        attending physician at{" "}
+                                                        {req.hospital}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <span className="bg-amber-100 text-amber-800 text-[11px] font-bold px-2 py-0.5 rounded uppercase">
+                                                {req.status}
+                                            </span>
+                                        </div>
+
+                                        <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-lg grid grid-cols-2 md:grid-cols-4 gap-2 text-xs mb-6">
+                                            <div>
+                                                <span className="text-[10px] text-slate-400 block uppercase font-bold">
+                                                    Request
+                                                </span>
+                                                <span className="font-bold">
+                                                    {req.reqId}
+                                                </span>
+                                            </div>
+                                            <div>
+                                                <span className="text-[10px] text-slate-400 block uppercase font-bold">
+                                                    Physician
+                                                </span>
+                                                <span className="font-medium">
+                                                    {req.physician}
+                                                </span>
+                                            </div>
+                                            <div>
+                                                <span className="text-[10px] text-slate-400 block uppercase font-bold">
+                                                    Component
+                                                </span>
+                                                <span className="font-bold text-prc-red">
+                                                    {req.component}
+                                                </span>
+                                            </div>
+                                            <div>
+                                                <span className="text-[10px] text-slate-400 block uppercase font-bold">
+                                                    Branch
+                                                </span>
+                                                <span className="font-medium">
+                                                    {req.branch}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        {/* Dynamic Status Progress Bar */}
+                                        <div className="flex items-center justify-between text-xs px-2">
+                                            <div
+                                                className={`flex items-center gap-1.5 font-bold ${reqLevel >= 1 ? "text-emerald-600" : "text-slate-400"}`}
+                                            >
+                                                {reqLevel >= 1 ? (
+                                                    <CheckCircle className="w-4 h-4" />
+                                                ) : (
+                                                    <span className="w-4 h-4 rounded-full border-2 border-slate-300"></span>
+                                                )}{" "}
+                                                Submitted
+                                            </div>
+                                            <div
+                                                className={`h-0.5 flex-grow mx-2 ${reqLevel >= 2 ? "bg-emerald-500" : "bg-slate-200"}`}
+                                            ></div>
+
+                                            <div
+                                                className={`flex items-center gap-1.5 font-bold ${reqLevel >= 2 ? "text-emerald-600" : "text-slate-400"}`}
+                                            >
+                                                {reqLevel >= 2 ? (
+                                                    <CheckCircle className="w-4 h-4" />
+                                                ) : (
+                                                    <span className="w-4 h-4 rounded-full border-2 border-slate-300"></span>
+                                                )}{" "}
+                                                Verified
+                                            </div>
+                                            <div
+                                                className={`h-0.5 flex-grow mx-2 ${reqLevel >= 3 ? (reqLevel === 3 ? "bg-prc-red" : "bg-emerald-500") : "bg-slate-200"}`}
+                                            ></div>
+
+                                            <div
+                                                className={`flex items-center gap-1.5 font-bold ${reqLevel === 3 ? "text-prc-red animate-pulse" : reqLevel > 3 ? "text-emerald-600" : "text-slate-400"}`}
+                                            >
+                                                {reqLevel > 3 ? (
+                                                    <CheckCircle className="w-4 h-4" />
+                                                ) : reqLevel === 3 ? (
+                                                    <Clock className="w-4 h-4" />
+                                                ) : (
+                                                    <span className="w-4 h-4 rounded-full border-2 border-slate-300"></span>
+                                                )}{" "}
+                                                Crossmatching
+                                            </div>
+                                            <div
+                                                className={`h-0.5 flex-grow mx-2 ${reqLevel >= 4 ? "bg-emerald-500" : "bg-slate-200"}`}
+                                            ></div>
+
+                                            <div
+                                                className={`flex items-center gap-1.5 font-bold ${reqLevel >= 4 ? "text-emerald-600" : "text-slate-400"}`}
+                                            >
+                                                {reqLevel >= 4 ? (
+                                                    <CheckCircle className="w-4 h-4" />
+                                                ) : (
+                                                    <span className="w-4 h-4 rounded-full border-2 border-slate-300"></span>
+                                                )}{" "}
+                                                Ready
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <h3 className="text-sm font-bold text-slate-900">
-                                            Hospital Blood Request Filed for You
-                                        </h3>
-                                        <p className="text-[11px] text-slate-500">
-                                            Initiated by your attending
-                                            physician at{" "}
-                                            {activeRequest.hospital}
-                                        </p>
-                                    </div>
-                                </div>
-                                <span className="bg-amber-100 text-amber-800 text-[11px] font-bold px-2 py-0.5 rounded uppercase">
-                                    {activeRequest.status}
-                                </span>
-                            </div>
-
-                            <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-lg grid grid-cols-2 md:grid-cols-4 gap-2 text-xs mb-6">
-                                <div>
-                                    <span className="text-[10px] text-slate-400 block uppercase font-bold">
-                                        Request
-                                    </span>
-                                    <span className="font-bold">
-                                        {activeRequest.reqId}
-                                    </span>
-                                </div>
-                                <div>
-                                    <span className="text-[10px] text-slate-400 block uppercase font-bold">
-                                        Physician
-                                    </span>
-                                    <span className="font-medium">
-                                        {activeRequest.physician}
-                                    </span>
-                                </div>
-                                <div>
-                                    <span className="text-[10px] text-slate-400 block uppercase font-bold">
-                                        Component
-                                    </span>
-                                    <span className="font-bold text-prc-red">
-                                        {activeRequest.component}
-                                    </span>
-                                </div>
-                                <div>
-                                    <span className="text-[10px] text-slate-400 block uppercase font-bold">
-                                        Branch
-                                    </span>
-                                    <span className="font-medium">
-                                        {activeRequest.branch}
-                                    </span>
-                                </div>
-                            </div>
-
-                            {/* Dynamic Status Progress Bar */}
-                            <div className="flex items-center justify-between text-xs px-2">
-                                <div
-                                    className={`flex items-center gap-1.5 font-bold ${reqLevel >= 1 ? "text-emerald-600" : "text-slate-400"}`}
-                                >
-                                    {reqLevel >= 1 ? (
-                                        <CheckCircle className="w-4 h-4" />
-                                    ) : (
-                                        <span className="w-4 h-4 rounded-full border-2 border-slate-300"></span>
-                                    )}{" "}
-                                    Submitted
-                                </div>
-                                <div
-                                    className={`h-0.5 flex-grow mx-2 ${reqLevel >= 2 ? "bg-emerald-500" : "bg-slate-200"}`}
-                                ></div>
-
-                                <div
-                                    className={`flex items-center gap-1.5 font-bold ${reqLevel >= 2 ? "text-emerald-600" : "text-slate-400"}`}
-                                >
-                                    {reqLevel >= 2 ? (
-                                        <CheckCircle className="w-4 h-4" />
-                                    ) : (
-                                        <span className="w-4 h-4 rounded-full border-2 border-slate-300"></span>
-                                    )}{" "}
-                                    Verified
-                                </div>
-                                <div
-                                    className={`h-0.5 flex-grow mx-2 ${reqLevel >= 3 ? (reqLevel === 3 ? "bg-prc-red" : "bg-emerald-500") : "bg-slate-200"}`}
-                                ></div>
-
-                                <div
-                                    className={`flex items-center gap-1.5 font-bold ${reqLevel === 3 ? "text-prc-red animate-pulse" : reqLevel > 3 ? "text-emerald-600" : "text-slate-400"}`}
-                                >
-                                    {reqLevel > 3 ? (
-                                        <CheckCircle className="w-4 h-4" />
-                                    ) : reqLevel === 3 ? (
-                                        <Clock className="w-4 h-4" />
-                                    ) : (
-                                        <span className="w-4 h-4 rounded-full border-2 border-slate-300"></span>
-                                    )}{" "}
-                                    Crossmatching
-                                </div>
-                                <div
-                                    className={`h-0.5 flex-grow mx-2 ${reqLevel >= 4 ? "bg-emerald-500" : "bg-slate-200"}`}
-                                ></div>
-
-                                <div
-                                    className={`flex items-center gap-1.5 font-bold ${reqLevel >= 4 ? "text-emerald-600" : "text-slate-400"}`}
-                                >
-                                    {reqLevel >= 4 ? (
-                                        <CheckCircle className="w-4 h-4" />
-                                    ) : (
-                                        <span className="w-4 h-4 rounded-full border-2 border-slate-300"></span>
-                                    )}{" "}
-                                    Ready
-                                </div>
-                            </div>
+                                );
+                            })}
                         </div>
                     )}
 
@@ -515,8 +543,8 @@ export default function DonorDashboard() {
                                         <QRCode
                                             value={profile.din}
                                             size={200}
-                                            level="H" // High error correction so it scans easily on mobile screens
-                                            fgColor="#0f172a" // slate-900
+                                            level="H"
+                                            fgColor="#0f172a"
                                         />
                                     ) : (
                                         <div className="w-[200px] h-[200px] flex items-center justify-center bg-slate-50 text-slate-400 text-xs text-center p-4">
