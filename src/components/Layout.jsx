@@ -10,6 +10,7 @@ import {
     Loader2,
 } from "lucide-react";
 import AccountModal from "./AccountModal";
+import { isAdmin } from "../lib/adminRoles";
 
 export default function Layout() {
     const navigate = useNavigate();
@@ -62,7 +63,7 @@ export default function Layout() {
                     {/* Brand / Logo */}
                     <div
                         className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition"
-                        onClick={() => navigate(`/${profile?.role}`)}
+                        onClick={() => navigate(isAdmin(profile?.role) ? "/admin" : `/${profile?.role}`)}
                     >
                         <div className="bg-prc-red text-white p-1.5 rounded">
                             <Droplet className="w-5 h-5 fill-current" />
@@ -80,6 +81,8 @@ export default function Layout() {
                     {/* Profile Dropdown */}
                     <div className="relative">
                         <button
+                            aria-label="Open account menu"
+                            aria-expanded={showProfileMenu}
                             onClick={() => setShowProfileMenu(!showProfileMenu)}
                             className="flex items-center gap-2 hover:bg-slate-800 p-2 rounded-lg transition"
                         >

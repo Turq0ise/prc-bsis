@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { supabase } from "../lib/supabase";
+import { isAdmin as isAdminRole } from "../lib/adminRoles";
 import {
     User,
     Calendar,
@@ -22,7 +23,7 @@ export default function AccountModal({ profile, isOpen, onClose }) {
     const isDonor = profile?.role === "donor";
     const isPhysician = profile?.role === "physician";
     const isStaff = profile?.role === "staff";
-    const isAdmin = profile?.role === "admin";
+    const isAdmin = isAdminRole(profile?.role);
 
     // Common Form State
     const [fullName, setFullName] = useState(profile?.full_name || "");

@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../../lib/supabase";
-import { TestTube, CheckCircle, XCircle, Search, AlertCircle } from "lucide-react";
+import { TestTube } from "lucide-react";
+
+const quarantinedQuery = () => supabase.from("blood_units").select("*").eq("status", "quarantined");
 
 export default function SerologicalEntry() {
   const [quarantinedUnits, setQuarantinedUnits] = useState([]);
@@ -10,11 +12,15 @@ export default function SerologicalEntry() {
   const [testResults, setTestResults] = useState({ hiv: "Pending", hbsag: "Pending", hcv: "Pending", syphilis: "Pending", malaria: "Pending" });
 
   const fetchUnits = async () => {
-    const { data } = await supabase.from("blood_units").select("*").eq("status", "quarantined");
+    const { data } = await quarantinedQuery();
     if (data) setQuarantinedUnits(data);
   };
 
-  useEffect(() => { fetchUnits(); }, []);
+  useEffect(() => {
+    let active = true;
+    void quarantinedQuery().then(({ data }) => { if (active && data) setQuarantinedUnits(data); });
+    return () => { active = false; };
+  }, []);
 
   const submitResults = async () => {
     if (Object.values(testResults).includes("Pending")) return alert("Complete all tests.");
