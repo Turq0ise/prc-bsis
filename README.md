@@ -34,6 +34,102 @@ The application relies on a relational PostgreSQL database. Ensure the following
 * **`blood_units`**: Tracks the physical inventory lifecycle.
 * Columns: `unit_id` (text, PK), `donor_id` (uuid, FK), `appointment_id` (uuid, FK), `component_type` (text), `collection_date` (timestamp), `status` (text).
 
+## Database Tables
+
+### Table `profiles`
+
+#### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `role` | `text` |  Nullable |
+| `din` | `text` |  Nullable Unique |
+| `full_name` | `text` |  |
+| `blood_group` | `text` |  Nullable |
+| `chapter_id` | `text` |  Nullable |
+| `created_at` | `timestamptz` |  Nullable |
+| `birthdate` | `date` |  Nullable |
+| `sex` | `text` |  Nullable |
+
+### Table `blood_units`
+
+#### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `isbt_barcode` | `uuid` | Primary |
+| `donor_id` | `uuid` |  Nullable |
+| `current_chapter` | `text` |  |
+| `component_type` | `text` |  |
+| `abo` | `text` |  |
+| `rh` | `text` |  |
+| `volume_ml` | `int4` |  Nullable |
+| `status` | `text` |  Nullable |
+| `collection_date` | `timestamptz` |  Nullable |
+| `expiration_date` | `timestamptz` |  Nullable |
+
+### Table `serological_tests`
+
+#### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `test_id` | `uuid` | Primary |
+| `unit_id` | `uuid` |  Nullable |
+| `medtech_id` | `uuid` |  Nullable |
+| `hiv_reactive` | `bool` |  Nullable |
+| `hbv_reactive` | `bool` |  Nullable |
+| `hcv_reactive` | `bool` |  Nullable |
+| `syphilis_reactive` | `bool` |  Nullable |
+| `malaria_reactive` | `bool` |  Nullable |
+| `final_result` | `text` |  Nullable |
+| `tested_at` | `timestamptz` |  Nullable |
+
+### Table `requisitions`
+
+#### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `physician_id` | `uuid` |  Nullable |
+| `patient_name` | `text` |  |
+| `hospital_name` | `text` |  |
+| `target_chapter` | `text` |  |
+| `component_needed` | `text` |  |
+| `units_req` | `int4` |  |
+| `urgency` | `text` |  Nullable |
+| `status` | `text` |  Nullable |
+| `slip_file_path` | `text` |  Nullable |
+| `created_at` | `timestamptz` |  Nullable |
+
+### Table `transfers`
+
+#### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `requesting_chapter` | `text` |  |
+| `supplying_chapter` | `text` |  |
+| `component_needed` | `text` |  Nullable |
+| `status` | `text` |  Nullable |
+| `requested_at` | `timestamptz` |  Nullable |
+
+### Table `audit_logs`
+
+#### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `log_id` | `uuid` | Primary |
+| `user_id` | `uuid` |  Nullable |
+| `table_name` | `text` |  Nullable |
+| `action_type` | `text` |  Nullable |
+| `old_data` | `jsonb` |  Nullable |
+| `new_data` | `jsonb` |  Nullable |
+| `logged_at` | `timestamptz` |  Nullable |
 
 
 ## Prerequisites
