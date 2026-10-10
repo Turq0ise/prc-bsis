@@ -16,6 +16,13 @@ import SerologicalEntry from "./pages/staff/SerologicalEntry";
 import TransferCoord from "./pages/staff/TransferCoord";
 import RequisitionForm from "./pages/physician/RequisitionForm";
 import AuditLogs from "./pages/admin/AuditLogs";
+import AdminLayout from "./pages/admin/AdminLayout";
+import AdminReports from "./pages/admin/AdminReports";
+import SupplyMonitor from "./pages/admin/SupplyMonitor";
+import AdminAccounts from "./pages/admin/AdminAccounts";
+import AdminSettings from "./pages/admin/AdminSettings";
+import AdminTransfers from "./pages/admin/AdminTransfers";
+import { Navigate } from "react-router-dom";
 
 // ... existing imports ...
 
@@ -57,7 +64,16 @@ export default function App() {
                         path="/physician/request"
                         element={<RequisitionForm />}
                     />
-                    <Route path="/admin/audit" element={<AuditLogs />} />
+                    <Route path="/admin" element={<AdminLayout />}>
+                        <Route index element={<Navigate to="audit" replace />} />
+                        <Route path="audit" element={<AuditLogs />} />
+                        <Route path="reports" element={<AdminReports />} />
+                        <Route path="supply" element={<SupplyMonitor />} />
+                        <Route path="accounts" element={<AdminAccounts />} />
+                        <Route path="transfers" element={<AdminTransfers />} />
+                        <Route path="settings" element={<AdminSettings />} />
+                        <Route path="*" element={<Navigate to="/admin/audit" replace />} />
+                    </Route>
                 </Route>
             </Routes>
         </BrowserRouter>

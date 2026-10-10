@@ -9,6 +9,7 @@ import {
     Calendar,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
+import { isAdmin } from "../lib/adminRoles";
 
 const roleDescriptions = {
     donor: "Public citizens who voluntarily donate blood. Access digital ID and booking.",
@@ -47,6 +48,7 @@ export default function Login() {
 
         try {
             if (isRegistering) {
+                if (isAdmin(role)) throw new Error("Admin registration is not available here. Contact your project administrator.");
                 const { data: authData, error: authError } =
                     await supabase.auth.signUp({
                         email,
@@ -100,7 +102,7 @@ export default function Login() {
 
                 const { data: profile, error: profileError } = await supabase
                     .from("profiles")
-                    .select("role")
+                    .select("*")
                     .eq("id", authData.user.id)
                     .maybeSingle();
 
@@ -111,10 +113,15 @@ export default function Login() {
                     );
 
                 const userRole = profile.role;
+                if (profile.is_active === false) {
+                    await supabase.auth.signOut();
+                    throw new Error("Your account has been disabled. Contact your administrator.");
+                }
                 if (userRole === "donor") navigate("/donor");
                 if (userRole === "staff") navigate("/staff");
                 if (userRole === "physician") navigate("/physician/request");
-                if (userRole === "admin") navigate("/admin/audit");
+                if (isAdmin(userRole)) navigate("/admin/audit");
+                if (!["donor", "staff", "physician"].includes(userRole) && !isAdmin(userRole)) throw new Error("Your account has no assigned portal role. Contact your administrator.");
             }
         } catch (err) {
             setErrorMsg(err.message);
@@ -163,7 +170,7 @@ export default function Login() {
                         </div>
 
                         <div className="grid grid-cols-4 bg-slate-100 p-1 rounded-lg text-xs font-semibold text-center text-slate-600">
-                            {["donor", "physician", "staff", "admin"].map(
+                            {(isRegistering ? ["donor", "physician", "staff"] : ["donor", "physician", "staff", "admin"]).map(
                                 (r) => (
                                     <button
                                         key={r}
@@ -385,6 +392,7 @@ export default function Login() {
                             <button
                                 type="button"
                                 onClick={() => {
+                                    if (!isRegistering) setRole("donor");
                                     setIsRegistering(!isRegistering);
                                     setErrorMsg("");
                                 }}

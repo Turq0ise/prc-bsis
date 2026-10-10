@@ -168,6 +168,18 @@ npm run dev
 
 
 
+## Admin portal
+
+Admin pages read the existing Supabase tables for audit review, monthly reports
+with PDF/CSV export, supply monitoring, an account directory, and transfer
+oversight. Accounts and portal settings are read-only. Existing `admin` accounts
+use the national view; an existing `chapter_admin` profile uses its assigned chapter.
+
+No SQL migration or new database functions are required for these frontend changes.
+Actual data access still depends on the project's existing Supabase policies.
+See [Admin setup and reporting definitions](docs/admin-setup.md) for data limits
+and validation steps.
+
 ## Project Structure
 
 ```text
