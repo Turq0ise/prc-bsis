@@ -249,7 +249,14 @@ test("main donor pages and guest booking remain available alongside admin", asyn
     const errors = []; page.on("pageerror", (error) => errors.push(error.message));
     const calls = await mockBackend(page, { ...admin, full_name: "Test Donor", role: "donor", din: "DIN-TEST", blood_group: "O+" }, { empty: true }); await login(page);
     await expect(page.getByRole("heading", { name: "PRC Voluntary Donor Portal" })).toBeVisible();
-    await page.getByRole("button", { name: "Book Donation Slot", exact: true }).click();
+    await page.getByRole("button", { name: /Open Digital Pass/ }).click();
+    const passHeading = page.getByRole("heading", { name: "Digital Donor Pass", exact: true });
+    await expect(passHeading).toBeVisible();
+    const passModal = passHeading.locator("..").locator("..").locator("..");
+    await expect(passModal.getByText("DIN-TEST", { exact: true })).toBeVisible();
+    await expect(passModal.locator('svg[width="200"][height="200"]')).toBeVisible();
+    await passModal.getByRole("button").click();
+    await page.getByRole("link", { name: "Book Donation Slot", exact: true }).click();
     await expect(page).toHaveURL(/\/donor\/book$/);
     await expect(page.getByRole("heading", { name: "Schedule Donation Slot" })).toBeVisible();
     await page.getByRole("button", { name: "Open account menu" }).click();
@@ -264,6 +271,7 @@ test("main physician form retains its signed-in profile", async ({ page }) => {
     const calls = await mockBackend(page, { ...admin, full_name: "Test Physician", role: "physician" }); await login(page);
     await expect(page).toHaveURL(/\/physician\/request$/);
     await expect(page.getByRole("heading", { name: "Submit Official Blood Requisition" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Scan Patient QR", exact: true })).toBeVisible();
     await expect(page.getByText("Test Physician", { exact: true }).last()).toBeVisible();
     expect(errors).toEqual([]); readOnly(calls);
 });

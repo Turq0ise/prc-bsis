@@ -8,7 +8,6 @@ import {
 } from "lucide-react";
 
 export default function Dashboard() {
-    const navigate = useNavigate();
     const [loading, setLoading] = useState(true);
     const [metrics, setMetrics] = useState({
         total: 0,
