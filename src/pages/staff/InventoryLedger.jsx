@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../../lib/supabase";
-import { Search, Filter, AlertTriangle, X } from "lucide-react";
+import { Search, X } from "lucide-react";
+
+const inventoryQuery = () => supabase.from("blood_units").select("*").order("created_at", { ascending: false });
 
 export default function InventoryLedger() {
   const [units, setUnits] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState("All");
   
@@ -13,13 +14,15 @@ export default function InventoryLedger() {
   const [newUnit, setNewUnit] = useState({ unit_id: "", blood_group: "O+", component_type: "PRBC" });
 
   const fetchInventory = async () => {
-    setLoading(true);
-    const { data } = await supabase.from("blood_units").select("*").order("created_at", { ascending: false });
+    const { data } = await inventoryQuery();
     if (data) setUnits(data);
-    setLoading(false);
   };
 
-  useEffect(() => { fetchInventory(); }, []);
+  useEffect(() => {
+    let active = true;
+    void inventoryQuery().then(({ data }) => { if (active && data) setUnits(data); });
+    return () => { active = false; };
+  }, []);
 
   const handleLogUnit = async (e) => {
     e.preventDefault();
@@ -61,7 +64,7 @@ export default function InventoryLedger() {
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50">
           <div className="bg-white p-6 rounded-xl shadow-xl w-96 relative">
-            <button onClick={() => setIsModalOpen(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><X className="w-5 h-5"/></button>
+            <button aria-label="Close new unit form" onClick={() => setIsModalOpen(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><X className="w-5 h-5"/></button>
             <h3 className="font-black text-lg mb-4">Log New Unit</h3>
             <form onSubmit={handleLogUnit} className="space-y-4">
               <div>

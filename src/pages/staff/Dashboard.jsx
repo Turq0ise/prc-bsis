@@ -1,10 +1,8 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 import { Database, ArrowDownLeft, ArrowUpRight, AlertOctagon } from "lucide-react";
 
 export default function Dashboard() {
-  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [metrics, setMetrics] = useState({
     total: 0, prbc: 0, platelets: 0, ffp: 0, wholeBlood: 0,

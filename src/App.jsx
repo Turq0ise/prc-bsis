@@ -17,6 +17,13 @@ import TransferCoord from "./pages/staff/TransferCoord";
 import RequisitionForm from "./pages/physician/RequisitionForm";
 import Reports from "./pages/staff/Reports";
 import AuditLogs from "./pages/admin/AuditLogs";
+import AdminLayout from "./pages/admin/AdminLayout";
+import AdminReports from "./pages/admin/AdminReports";
+import SupplyMonitor from "./pages/admin/SupplyMonitor";
+import AdminAccounts from "./pages/admin/AdminAccounts";
+import AdminSettings from "./pages/admin/AdminSettings";
+import AdminTransfers from "./pages/admin/AdminTransfers";
+import { Navigate } from "react-router-dom";
 
 export default function App() {
     return (
@@ -45,9 +52,11 @@ export default function App() {
                     <Route path="/staff" element={<StaffLayout />}>
                         <Route index element={<StaffDashboard />} />
                         <Route path="ledger" element={<InventoryLedger />} />
+                        <Route path="inventory" element={<InventoryLedger />} />
                         <Route path="serology" element={<SerologicalEntry />} />
+                        <Route path="testing" element={<SerologicalEntry />} />
                         <Route path="transfers" element={<TransferCoord />} />
-                        <Route path="/staff/reports" element={<Reports />} />
+                        <Route path="reports" element={<Reports />} />
                         <Route
                             path="board"
                             element={<PublicBoard isNested={true} />}
@@ -59,9 +68,17 @@ export default function App() {
                         path="/physician/request"
                         element={<RequisitionForm />}
                     />
-
                     {/* Admin Portal */}
-                    <Route path="/admin/audit" element={<AuditLogs />} />
+                    <Route path="/admin" element={<AdminLayout />}>
+                        <Route index element={<Navigate to="audit" replace />} />
+                        <Route path="audit" element={<AuditLogs />} />
+                        <Route path="reports" element={<AdminReports />} />
+                        <Route path="supply" element={<SupplyMonitor />} />
+                        <Route path="accounts" element={<AdminAccounts />} />
+                        <Route path="transfers" element={<AdminTransfers />} />
+                        <Route path="settings" element={<AdminSettings />} />
+                        <Route path="*" element={<Navigate to="/admin/audit" replace />} />
+                    </Route>
                 </Route>
             </Routes>
         </BrowserRouter>
