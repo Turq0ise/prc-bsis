@@ -46,14 +46,14 @@ export default function AdminLayout() {
         <NavLink to="/" className="admin-button mt-4">Return to sign in</NavLink>
     </section>;
     const national = isNationalAdmin(access.profile.role);
-    const links = [["audit", "Audit logs"], ["reports", "Reports"], ["supply", "Supply monitoring"], ["accounts", "Accounts"], ["transfers", "Transfers"]];
-    if (national) links.push(["settings", "Portal settings"]);
+    const links = [["audit", "Audit logs"], ["reports", "Reports"], ["supply", "Inventory"], ["accounts", "Accounts"], ["transfers", "Transfers"]];
+    if (national) links.push(["settings", "Portal information"]);
     return <div className="space-y-6">
         <header className="admin-heading">
             <div className="flex items-center gap-3"><ShieldCheck size={28} aria-hidden="true" /><div>
                 <p className="text-xs uppercase tracking-widest text-red-200">Administration</p>
                 <h1 className="text-2xl font-bold">Blood services oversight</h1>
-                <p className="mt-2 text-sm text-slate-200">{access.profile.full_name || "Administrator"} · {roleLabel(access.profile.role)} · {national ? "All chapters" : access.profile.chapter_id}</p>
+                <p className="mt-2 text-sm text-slate-200">{access.profile.full_name || "Administrator"} · {roleLabel(access.profile.role)} · {national ? "National view" : access.profile.chapter_id}</p>
             </div></div>
         </header>
         <nav aria-label="Admin pages" className="flex flex-wrap gap-2">

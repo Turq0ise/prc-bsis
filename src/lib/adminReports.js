@@ -10,13 +10,17 @@ export function csvCell(value) {
     if (/^[\s]*[=+@-]/.test(text)) text = `'${text}`;
     return `"${text.replaceAll('"', '""')}"`;
 }
+export function reportColumns(report) {
+    return [["collections", "Recorded collections"], ["dispensed", "Recorded dispenses"], ["discarded", "Recorded discards"], ["requisitions", "Requisitions"], ["units_requested", "Units requested"], ["remaining", "Current available stock"]].filter(([key]) => report.components.some((row) => row[key] !== null && row[key] !== undefined));
+}
 export function reportRows(report) {
-    return [["Component", "Recorded collections", "Recorded dispenses", "Recorded discards", "Requisitions", "Units requested", "Current available stock"],
-        ...report.components.map((row) => [row.component, ...["collections", "dispensed", "discarded", "requisitions", "units_requested", "remaining"].map((key) => row[key] ?? "Unavailable")])];
+    const columns = reportColumns(report);
+    return [["Component", ...columns.map(([, label]) => label)],
+        ...report.components.map((row) => [row.component, ...columns.map(([key]) => row[key] ?? "—")])];
 }
 export function reportCsv(report) {
-    return [["PRC-BSIS Operational Summary"], ["Chapter", report.chapter || "All chapters"], ["From", report.start], ["Through", report.end],
-        ...reportRows(report), ...Object.entries(report.screening || {}).map(([label,value]) => [`Screening ${label}`,value ?? "Unavailable"]), ["Generated", report.generated_at], ...report.warnings.map((warning) => ["Unavailable section", warning]), ["Notes", report.notes],
+    return [["PRC-BSIS Operational Summary"], ["Scope", report.chapter || "Accessible records"], ["From", report.start], ["Through", report.end],
+        ...reportRows(report), ...Object.entries(report.screening || {}).filter(([,value]) => value !== null && value !== undefined).map(([label,value]) => [`Screening ${label}`,value]), ["Generated", report.generated_at], ...report.warnings.map((warning) => ["Data loading issue", warning]), ["Notes", report.notes],
     ].map((row) => row.map(csvCell).join(",")).join("\r\n");
 }
 export function downloadFile(content, type, name) {
@@ -29,12 +33,13 @@ export async function downloadReportPdf(report) {
     const doc = new jsPDF({ orientation: "landscape" });
     doc.setFontSize(18); doc.text("PRC-BSIS Operational Summary", 14, 18);
     doc.setFontSize(10);
-    const subtitle = doc.splitTextToSize(`${report.chapter || "All chapters"} | ${report.start} through ${report.end} | Philippine time`, 265);
+    const subtitle = doc.splitTextToSize(`${report.chapter || "Accessible records"} | ${report.start} through ${report.end} | Philippine time`, 265);
     doc.text(subtitle, 14, 27);
     const [head, ...body] = reportRows(report);
     autoTable(doc, { startY: Math.max(34, 27 + subtitle.length * 5), head: [head], body, styles: { fontSize: 9 }, headStyles: { fillColor: [237, 27, 36] }, margin: { bottom: 30 } });
     if (report.screening) {
-        autoTable(doc, { startY: doc.lastAutoTable.finalY + 10, head: [["Units tested", "Passed", "Failed", "Clearance rate"]], body: [[report.screening.tested, report.screening.passed, report.screening.failed, report.screening.clearance_rate === null ? "No tests" : `${report.screening.clearance_rate}%`]], styles: { fontSize: 9 }, headStyles: { fillColor: [15, 23, 42] }, margin: { bottom: 30 } });
+        const entries = [["Units tested", report.screening.tested], ["Passed", report.screening.passed], ["Failed", report.screening.failed], ["Clearance rate", report.screening.clearance_rate === null ? null : `${report.screening.clearance_rate}%`]].filter(([,value]) => value !== null && value !== undefined);
+        autoTable(doc, { startY: doc.lastAutoTable.finalY + 10, head: [entries.map(([label]) => label)], body: [entries.map(([,value]) => value)], styles: { fontSize: 9 }, headStyles: { fillColor: [15, 23, 42] }, margin: { bottom: 30 } });
     }
     const notes = `${report.notes} ${report.warnings.join(" ")} Internal operational summary; not a certified regulatory form.`;
     const lines = doc.splitTextToSize(notes, 265);
