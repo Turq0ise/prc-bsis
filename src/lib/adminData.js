@@ -14,7 +14,9 @@ export function bloodGroup(unit) {
     const raw = String(unit.rh || "").trim().toLowerCase();
     const rh = ({ positive: "+", negative: "-" })[raw] || raw;
     const group = `${abo}${rh}`;
-    return BLOOD_GROUPS.includes(group) ? group : null;
+    if (BLOOD_GROUPS.includes(group)) return group;
+    const combined = String(unit.blood_group || unit.blood_type || "").trim().toUpperCase().replaceAll("POSITIVE", "+").replaceAll("NEGATIVE", "-").replaceAll(" ", "");
+    return BLOOD_GROUPS.includes(combined) ? combined : null;
 }
 export function resolveChapter(profile, requested = null) {
     if (!adminAccess(profile)) throw new Error("Administrator access required.");
@@ -79,7 +81,7 @@ async function loadChapters(client, profile) {
     if (scope) return [{ id: scope, name: scope }];
     const sources = await Promise.allSettled([
         readAll(() => client.from("profiles").select("id,chapter_id", { count: "exact" }).order("id")),
-        readAll(() => client.from("blood_units").select("isbt_barcode,current_chapter", { count: "exact" }).order("isbt_barcode")),
+        inventory(client, null).then((result) => result.units),
         readAll(() => client.from("requisitions").select("id,target_chapter", { count: "exact" }).order("id")),
         readAll(() => client.from("transfers").select("id,requesting_chapter,supplying_chapter", { count: "exact" }).order("id")),
     ]);
@@ -123,10 +125,22 @@ async function inventory(client, chapter) {
         return { units, supplySupported: true };
     } catch (error) {
         if (!/column .* does not exist/i.test(error.message)) throw error;
-        // The team's existing prototype uses unit_id and has no stock breakdown fields.
-        if (chapter) throw new Error("Chapter inventory is unavailable because the existing table has no chapter assignment fields.", { cause: error });
-        const units = await readAll(() => client.from("blood_units").select("unit_id,component_type,status,collection_date", { count: "exact" }).order("unit_id"));
-        return { units: units.map((unit) => ({ ...unit, isbt_barcode: unit.unit_id })), supplySupported: false };
+        // Preserve optional existing fields instead of discarding them in the fallback.
+        const identifier = error.message.includes("isbt_barcode") ? "unit_id" : "isbt_barcode";
+        const read = (chapterField) => readAll(() => scoped(client.from("blood_units").select("*", { count: "exact" }), chapterField, chapter).order(identifier));
+        let raw;
+        try { raw = await read("current_chapter"); }
+        catch (scopeError) {
+            if (!chapter || !/column .*current_chapter.* does not exist/i.test(scopeError.message)) throw scopeError;
+            try { raw = await read("chapter_id"); }
+            catch (aliasError) {
+                if (!/column .*chapter_id.* does not exist/i.test(aliasError.message)) throw aliasError;
+                throw new Error("Chapter inventory is unavailable because the existing table has no chapter assignment fields.", { cause: aliasError });
+            }
+        }
+        const fields = new Set(raw.flatMap((unit) => Object.keys(unit)));
+        const supplySupported = (fields.has("current_chapter") || fields.has("chapter_id")) && (fields.has("blood_group") || fields.has("blood_type") || (fields.has("abo") && fields.has("rh"))) && (fields.has("expiration_date") || fields.has("expiry_date"));
+        return { units: raw.map((unit) => ({ ...unit, unit_id: unit.unit_id || unit.isbt_barcode, isbt_barcode: unit.isbt_barcode || unit.unit_id, current_chapter: unit.current_chapter ?? unit.chapter_id, expiration_date: unit.expiration_date ?? unit.expiry_date })), supplySupported };
     }
 }
 export function supplySummary(units, chapters, now = Date.now()) {
@@ -193,7 +207,7 @@ export function existingReport(units, requests, tests, logs, { start, end, chapt
         screening = { tested: rows.length, passed, failed: rows.filter((row) => String(row.final_result).toLowerCase() === "failed").length, clearance_rate: rows.length ? Math.round(passed / rows.length * 1000) / 10 : null };
     }
     return { chapter, start, end, components, totals: { collections: total("collections"), dispensed: total("dispensed"), discarded: total("discarded"), requisitions: total("requisitions"), units_requested: total("units_requested"), remaining: total("remaining") }, screening, generated_at: new Date(now).toISOString(), warnings,
-        notes: "Collections and screening are based on existing records and current chapter assignment. Dispenses/discards count only evidenced audit transitions; totals may be incomplete. Without dated transitions they are unavailable. Stock is current available, unexpired stock, not historical month-end stock. Deleted records and past chapter locations cannot be reconstructed." };
+        notes: ["This summary includes only figures supported by accessible recorded data.", units && "Collections use recorded collection dates.", chapter && "Chapter totals use current inventory assignment.", hasOutcomeEvidence && "Dispenses/discards count evidenced audit transitions and may be incomplete.", units && currentStockSupported && "Stock shows current available or cleared units with valid future expiry dates, rather than a historical month-end balance.", "Deleted records and past chapter locations cannot be reconstructed."].filter(Boolean).join(" ") };
 }
 async function loadReport(client, params, chapter) {
     const start = params.p_start;
@@ -202,9 +216,9 @@ async function loadReport(client, params, chapter) {
     const through = dayBounds(end).end;
     if (end < start) throw new Error("Choose a valid reporting period.");
     const results = await Promise.allSettled([
-        inventory(client, chapter),
+        inventory(client, chapter).catch((error) => { if (error.message.startsWith("Chapter inventory is unavailable")) return null; throw error; }),
         readAll(() => scoped(client.from("requisitions").select("id,target_chapter,component_needed,units_req,created_at", { count: "exact" }), "target_chapter", chapter).gte("created_at", from).lt("created_at", through).order("id")).catch((error) => {
-            if (/column .* does not exist/i.test(error.message)) throw new Error("The existing requisitions table lacks the fields needed for monthly request totals.");
+            if (/column .* does not exist/i.test(error.message)) return null;
             throw error;
         }),
         readAll(() => client.from("serological_tests").select("test_id,unit_id,final_result,tested_at", { count: "exact" }).gte("tested_at", from).lt("tested_at", through).order("test_id")),
@@ -213,10 +227,9 @@ async function loadReport(client, params, chapter) {
     const labels = ["Inventory", "Requisitions", "Screening", "Audit history"];
     const warnings = results.flatMap((result, index) => result.status === "rejected" ? [`${labels[index]} unavailable: ${result.reason.message}`] : []);
     if (results.every((result) => result.status === "rejected")) throw new Error("Unable to read the existing records for this report.");
-    if (chapter && results[0].status === "rejected") { results[2] = { status: "rejected" }; warnings.push("Chapter screening totals require readable chapter inventory."); }
     const data = results.map((result) => result.status === "fulfilled" ? result.value : null);
+    if (chapter && !data[0]) data[2] = null;
     const currentStockSupported = data[0]?.supplySupported ?? false;
-    if (data[0] && !currentStockSupported) warnings.push("Current stock unavailable: existing inventory has no chapter, blood-group, or expiry fields.");
     data[0] = data[0]?.units ?? null;
     return existingReport(...data, { start, end, chapter, warnings, currentStockSupported });
 }
@@ -229,7 +242,11 @@ export async function loadAdminData(client, method, params, profile) {
         case "supply": {
             const inventoryData = await inventory(client, chapter);
             const units = inventoryData.units;
-            if (!inventoryData.supplySupported) return { rows: [], inventory_rows: units, breakdown_unavailable: true, recorded_units: units.length };
+            if (!inventoryData.supplySupported) return { rows: [], inventory_rows: units, breakdown_unavailable: true, recorded_units: units.length,
+                statuses: [...new Set(units.map((unit) => String(unit.status || "").trim()).filter(Boolean))].sort(),
+                cleared_units: units.filter((unit) => ["available", "cleared"].includes(String(unit.status).toLowerCase())).length,
+                dispensed_units: units.filter((unit) => ["dispensed", "dispatched"].includes(String(unit.status).toLowerCase())).length,
+                quarantined_units: units.filter((unit) => String(unit.status).toLowerCase() === "quarantined").length };
             let chapters;
             if (chapter) chapters = [{ id: chapter, name: chapter }];
             else { try { chapters = await loadChapters(client, profile); } catch { chapters = []; } }

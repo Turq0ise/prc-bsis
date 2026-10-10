@@ -22,7 +22,7 @@ async function mockBackend(page, profile = admin, options = {}) {
     if (options.empty) for (const table of Object.keys(data)) if (table !== "profiles") data[table] = [];
     if (options.noOutcomes) data.audit_logs = [];
     if (options.prototype) {
-        data.blood_units = [{ unit_id: "legacy-unit", component_type: "PRBC", status: "Available", collection_date: current }];
+        data.blood_units = Array.from({ length: 4 }, (_, index) => ({ unit_id: `recorded-unit-${index + 1}`, component_type: "PRBC", status: index === 3 ? "cleared" : "dispensed", collection_date: current }));
         data.audit_logs = [];
     }
     await page.routeWebSocket("**/realtime/v1/**", (socket) => socket.close());
@@ -45,6 +45,10 @@ async function mockBackend(page, profile = admin, options = {}) {
         }
         if (options.prototype && ((table === "blood_units" && params.select?.includes("isbt_barcode")) || (table === "requisitions" && params.select?.includes("target_chapter")))) {
             await route.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify({ code: "42703", message: `column ${table}.${table === "blood_units" ? "isbt_barcode" : "target_chapter"} does not exist` }) }); return;
+        }
+        if (options.prototype && table === "blood_units" && (params.current_chapter || params.chapter_id)) {
+            const column = params.current_chapter ? "current_chapter" : "chapter_id";
+            await route.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify({ code: "42703", message: `column blood_units.${column} does not exist` }) }); return;
         }
         if (!data[table]) { await route.fulfill({ status: 404, contentType: "application/json", body: JSON.stringify({ message: "Unexpected table" }) }); return; }
         let rows = [...data[table]];
@@ -98,20 +102,21 @@ test("admin reads existing tables, filters, exports, and has read-only accounts/
     const calls = await mockBackend(page); await login(page);
     await expect(page.getByRole("heading", { name: "Transaction audit logs" })).toBeVisible();
     await page.getByRole("button", { name: "View", exact: true }).click();
-    await expect(page.getByRole("region", { name: "Audit record details" })).toContainText("Not recorded");
+    await expect(page.getByRole("region", { name: "Audit record details" })).toContainText("log-test-1");
+    await expect(page.getByRole("region", { name: "Audit record details" })).not.toContainText("IP address");
     await expect(page.getByRole("region", { name: "Audit record details" })).toContainText("Dispensed");
     await page.getByRole("combobox", { name: "Action", exact: true }).selectOption("DELETE"); await expect(page.getByText("No records match this selection.")).toBeVisible();
     await page.getByRole("combobox", { name: "Action", exact: true }).selectOption("");
     await expect(page.getByRole("button", { name: "View", exact: true })).toBeVisible();
     await page.screenshot({ path: "test-results/admin-audit-desktop.png", fullPage: true });
-    await page.getByRole("link", { name: "Reports", exact: true }).click(); await expect(page.getByRole("heading", { name: "Branch utilization reports" })).toBeVisible();
+    await page.getByRole("link", { name: "Reports", exact: true }).click(); await expect(page.getByRole("heading", { name: "Monthly reports" })).toBeVisible();
     await page.getByRole("combobox", { name: "Chapter", exact: true }).selectOption("A");
-    await expect(page.getByRole("columnheader", { name: "Current stock" })).toBeVisible();
+    await expect(page.getByRole("columnheader", { name: "Current available stock" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Export PDF" })).toBeVisible();
     const [csv] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "Export CSV" }).click()]); await csv.saveAs("test-results/report-preview.csv");
     const [pdf] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "Export PDF" }).click()]); await pdf.saveAs("test-results/report-preview.pdf");
     await page.screenshot({ path: "test-results/admin-reports-desktop.png", fullPage: true });
-    await page.getByRole("link", { name: "Supply monitoring" }).click(); await expect(page.getByRole("heading", { name: "Supply monitoring" })).toBeVisible();
+    await page.getByRole("link", { name: "Inventory", exact: true }).click(); await expect(page.getByRole("heading", { name: "Inventory overview" })).toBeVisible();
     await page.getByRole("combobox", { name: "Chapter", exact: true }).selectOption("B");
     await expect(page.getByRole("cell", { name: "A", exact: true })).toHaveCount(0);
     await expect(page.getByRole("cell", { name: "B", exact: true }).first()).toBeVisible();
@@ -119,7 +124,8 @@ test("admin reads existing tables, filters, exports, and has read-only accounts/
     await expect(page.getByText("Test Staff", { exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: /Edit access|Save access/ })).toHaveCount(0);
     await page.getByRole("link", { name: "Transfers", exact: true }).click(); await expect(page.getByRole("cell", { name: "Pending", exact: true })).toBeVisible();
-    await page.getByRole("link", { name: "Portal settings", exact: true }).click(); await expect(page.getByRole("heading", { name: "Supply display guide" })).toBeVisible();
+    await page.getByRole("link", { name: "Portal information", exact: true }).click(); await expect(page.getByRole("heading", { name: "Signed-in administrator" })).toBeVisible();
+    await expect(page.getByText("Test Administrator", { exact: true }).last()).toBeVisible();
     await expect(page.getByRole("button", { name: /Save/ })).toHaveCount(0);
     await page.getByRole("button", { name: "Open account menu" }).click();
     await page.getByRole("button", { name: "Sign Out" }).click(); await expect(page.getByRole("heading", { name: "Account Sign In" })).toBeVisible();
@@ -131,7 +137,7 @@ test("chapter admin filters queries and has responsive mobile navigation", async
     const calls = await mockBackend(page, { ...admin, role: "chapter_admin", chapter_id: "A" }); await login(page);
     await expect(page.getByRole("heading", { name: "Transaction audit logs" })).toBeVisible();
     await expect(page.getByRole("button", { name: "View", exact: true })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Portal settings", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Portal information", exact: true })).toHaveCount(0);
     await expect(page.getByRole("combobox", { name: "Chapter", exact: true })).toHaveCount(0);
     await page.screenshot({ path: "test-results/admin-audit-mobile.png", fullPage: true });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
@@ -160,7 +166,11 @@ test("empty audit data and unavailable outcome history are displayed honestly", 
     const calls = await mockBackend(page, admin, { empty: true }); await login(page);
     await expect(page.getByText("No records match this selection.")).toBeVisible();
     await page.getByRole("link", { name: "Reports", exact: true }).click();
-    await expect(page.getByRole("cell", { name: "Unavailable", exact: true }).first()).toBeVisible();
+    await expect(page.getByRole("columnheader", { name: "Recorded collections", exact: true })).toBeVisible();
+    await expect(page.getByRole("columnheader", { name: "Recorded dispenses", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("columnheader", { name: "Recorded discards", exact: true })).toHaveCount(0);
+    await expect(page.getByText("Clearance rate", { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("cell", { name: "Unavailable", exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Export CSV" })).toBeVisible(); readOnly(calls);
 });
 
@@ -168,21 +178,50 @@ test("a report can export readable data when screening is denied", async ({ page
     const calls = await mockBackend(page, admin, { denied: ["serological_tests"], noOutcomes: true }); await login(page);
     await page.getByRole("link", { name: "Reports", exact: true }).click();
     await expect(page.getByText(/Screening unavailable:/)).toBeVisible();
-    await expect(page.getByRole("cell", { name: "Unavailable", exact: true }).first()).toBeVisible();
+    await expect(page.getByRole("columnheader", { name: "Recorded collections", exact: true })).toBeVisible();
+    await expect(page.getByRole("cell", { name: "Unavailable", exact: true })).toHaveCount(0);
     const [csv] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "Export CSV" }).click()]);
     expect(csv.suggestedFilename()).toMatch(/prc-summary/); readOnly(calls);
 });
 
-test("the simpler existing inventory schema has a working read-only fallback", async ({ page }) => {
+test("the existing inventory shows only recorded fields and filters statuses and unit IDs", async ({ page }) => {
     const calls = await mockBackend(page, admin, { prototype: true }); await login(page);
-    await page.getByRole("link", { name: "Supply monitoring" }).click();
-    await expect(page.getByText(/usable supply breakdown is unavailable/)).toBeVisible();
-    await expect(page.getByRole("cell", { name: "legacy-unit", exact: true })).toBeVisible();
+    await page.getByRole("link", { name: "Inventory", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Inventory overview" })).toBeVisible();
+    await expect(page.getByText("4 records · Page 1 of 1")).toBeVisible();
+    for (const label of ["Chapter", "Blood group", "Expiry date"]) await expect(page.getByRole("columnheader", { name: label, exact: true })).toHaveCount(0);
+    await expect(page.getByText(/usable supply breakdown is unavailable/)).toHaveCount(0);
+    await page.getByRole("combobox", { name: "Recorded status", exact: true }).selectOption("cleared");
+    await expect(page.getByRole("cell", { name: "recorded-unit-4", exact: true })).toBeVisible();
+    await expect(page.getByRole("cell", { name: "recorded-unit-1", exact: true })).toHaveCount(0);
+    await expect(page.getByText("1 records · Page 1 of 1")).toBeVisible();
+    await page.getByRole("combobox", { name: "Recorded status", exact: true }).selectOption("");
+    await page.getByRole("textbox", { name: "Search unit ID" }).fill("unit-2");
+    await expect(page.getByRole("cell", { name: "recorded-unit-2", exact: true })).toBeVisible();
+    await expect(page.getByRole("cell", { name: "recorded-unit-4", exact: true })).toHaveCount(0);
+    await page.getByRole("textbox", { name: "Search unit ID" }).fill("missing");
+    await expect(page.getByText("No inventory records match this selection.")).toBeVisible();
+    await page.getByRole("textbox", { name: "Search unit ID" }).fill("");
+    await page.getByRole("combobox", { name: "Component", exact: true }).selectOption("PRBC");
+    await expect(page.getByText("4 records · Page 1 of 1")).toBeVisible();
     await page.screenshot({ path: "test-results/admin-supply-prototype.png", fullPage: true });
     await page.getByRole("link", { name: "Reports", exact: true }).click();
-    await expect(page.getByText(/Current stock unavailable:/)).toBeVisible();
-    await expect(page.getByText(/Requisitions unavailable:/)).toBeVisible();
-    await expect(page.getByRole("button", { name: "Export PDF" })).toBeVisible(); readOnly(calls);
+    await expect(page.getByRole("columnheader", { name: "Recorded collections", exact: true })).toBeVisible();
+    for (const label of ["Current available stock", "Requisitions", "Recorded dispenses", "Recorded discards"]) await expect(page.getByRole("columnheader", { name: label, exact: true })).toHaveCount(0);
+    await expect(page.getByRole("alert")).toHaveCount(0);
+    const [csv] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "Export CSV" }).click()]); await csv.saveAs("test-results/recorded-report-preview.csv");
+    const [pdf] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "Export PDF" }).click()]); await pdf.saveAs("test-results/recorded-report-preview.pdf");
+    await page.screenshot({ path: "test-results/admin-reports-prototype.png", fullPage: true });
+    readOnly(calls);
+});
+
+test("chapter inventory never falls back to unscoped records without chapter fields", async ({ page }) => {
+    const calls = await mockBackend(page, { ...admin, role: "chapter_admin", chapter_id: "A" }, { prototype: true }); await login(page);
+    await page.getByRole("link", { name: "Inventory", exact: true }).click();
+    await expect(page.getByRole("alert")).toContainText("Chapter inventory is unavailable");
+    await expect(page.getByRole("cell", { name: /recorded-unit/ })).toHaveCount(0);
+    expect(calls.filter((call) => call.table === "blood_units").every((call) => call.params.current_chapter === "eq.A" || call.params.chapter_id === "eq.A")).toBe(true);
+    readOnly(calls);
 });
 
 test("main staff navigation reaches inventory, testing, transfers, and charts", async ({ page }) => {
@@ -210,7 +249,7 @@ test("main donor pages and guest booking remain available alongside admin", asyn
     const errors = []; page.on("pageerror", (error) => errors.push(error.message));
     const calls = await mockBackend(page, { ...admin, full_name: "Test Donor", role: "donor", din: "DIN-TEST", blood_group: "O+" }, { empty: true }); await login(page);
     await expect(page.getByRole("heading", { name: "PRC Voluntary Donor Portal" })).toBeVisible();
-    await page.getByRole("button", { name: "Book Donation Slot" }).click();
+    await page.getByRole("button", { name: "Book Donation Slot", exact: true }).click();
     await expect(page).toHaveURL(/\/donor\/book$/);
     await expect(page.getByRole("heading", { name: "Schedule Donation Slot" })).toBeVisible();
     await page.getByRole("button", { name: "Open account menu" }).click();

@@ -171,11 +171,14 @@ npm run dev
 ## Admin portal
 
 Admin pages read the existing Supabase tables for audit review, monthly reports
-with PDF/CSV export, supply monitoring, an account directory, and transfer
-oversight. Accounts and portal settings are read-only. Existing `admin` accounts
+with PDF/CSV export, an inventory overview, an account directory, and transfer
+oversight. Accounts and portal information are read-only. Existing `admin` accounts
 use the national view; an existing `chapter_admin` profile uses its assigned chapter.
 
 No SQL migration or new database functions are required for these frontend changes.
+Pages and report exports show only figures supported by the existing records.
+The simpler inventory schema displays recorded unit statuses, components, and
+collection dates with search and filters; unsupported supply figures are omitted.
 Actual data access still depends on the project's existing Supabase policies.
 See [Admin setup and reporting definitions](docs/admin-setup.md) for data limits
 and validation steps.

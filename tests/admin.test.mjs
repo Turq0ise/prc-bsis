@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { adminAccess } from "../src/lib/adminRoles.js";
-import { monthDates, csvCell, reportCsv } from "../src/lib/adminReports.js";
+import { monthDates, csvCell, reportColumns, reportCsv } from "../src/lib/adminReports.js";
 import { dayBounds, resolveChapter, readAll, supplySummary, existingReport, loadAdminData, orValue } from "../src/lib/adminData.js";
 
 const admin = { id: "00000000-0000-0000-0000-000000000001", role: "admin" };
@@ -58,7 +58,7 @@ test("current terminal status cannot manufacture a monthly dispense date", () =>
     const report = existingReport([{ ...unit, status: "Dispensed" }], [], [], [], period);
     assert.equal(report.totals.collections, 1); assert.equal(report.totals.dispensed, null); assert.equal(report.totals.discarded, null);
     assert.equal(report.totals.remaining, 0);
-    assert.match(reportCsv(report), /Unavailable/); assert.match(reportCsv(report), /Current available stock/);
+    assert.doesNotMatch(reportCsv(report), /Unavailable|Recorded dispenses|Recorded discards/); assert.match(reportCsv(report), /Current available stock/);
 });
 
 test("reports use audit evidence, deduplicate outcomes, and keep current stock separate", () => {
@@ -134,7 +134,11 @@ test("all admin data loaders use existing read-only tables without RPCs", async 
 test("the existing unit_id prototype shows recorded inventory without inventing usable supply", async () => {
     const missing = { code: "42703", message: "column blood_units.isbt_barcode does not exist" };
     const client = mockClient({ blood_units: [{ unit_id: "old-unit", component_type: "PRBC", status: "Available", collection_date: "2026-10-02" }], serological_tests: [], audit_logs: [] }, {
-        blood_units: (call) => call.steps[0][1].includes("isbt_barcode") ? missing : null,
+        blood_units: (call) => {
+            if (call.steps[0][1].includes("isbt_barcode")) return missing;
+            const scope = call.steps.find(([method]) => method === "eq");
+            return scope ? { code: "42703", message: `column blood_units.${scope[1]} does not exist` } : null;
+        },
         requisitions: { code: "42703", message: "column requisitions.target_chapter does not exist" },
     });
     const supply = await loadAdminData(client, "supply", {}, admin);
@@ -142,6 +146,18 @@ test("the existing unit_id prototype shows recorded inventory without inventing 
     assert.equal(supply.inventory_rows[0].unit_id, "old-unit"); assert.equal(supply.total_available, undefined);
     const report = await loadAdminData(client, "report", { p_start: period.start, p_end: period.end }, admin);
     assert.equal(report.totals.collections, 1); assert.equal(report.totals.remaining, null); assert.equal(report.totals.requisitions, null);
-    assert.equal(report.warnings.length, 2);
+    assert.equal(report.warnings.length, 0);
+    assert.deepEqual(reportColumns(report).map(([key]) => key), ["collections"]);
+    assert.doesNotMatch(reportCsv(report), /Unavailable|Requisitions|Current available stock/);
     await assert.rejects(loadAdminData(client, "supply", {}, chapterAdmin), /Chapter inventory is unavailable/);
+});
+
+test("inventory preserves existing combined blood groups and expiry aliases with unit_id", async () => {
+    const missing = { code: "42703", message: "column blood_units.isbt_barcode does not exist" };
+    const future = new Date(Date.now() + 86400000).toISOString();
+    const client = mockClient({ blood_units: [{ unit_id: "alias-unit", current_chapter: "A", component_type: "PRBC", blood_group: "O+", expiry_date: future, status: "cleared", collection_date: "2026-10-02" }], profiles: [], requisitions: [], transfers: [] }, { blood_units: (call) => call.steps[0][1].includes("isbt_barcode") ? missing : null });
+    const result = await loadAdminData(client, "supply", {}, admin);
+    assert.equal(result.breakdown_unavailable, undefined);
+    assert.equal(result.total_available, 1);
+    assert.equal(result.rows.find((row) => row.component === "PRBC" && row.blood_group === "O+").units, 1);
 });

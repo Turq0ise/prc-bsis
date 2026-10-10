@@ -5,7 +5,7 @@ export function QueryState({ query, empty, children }) {
     return children;
 }
 export function ChapterFilter({ national, chapter, setChapter, chapters = [] }) {
-    if (!national) return null;
+    if (!national || !chapters.length) return null;
     return <label className="admin-field">Chapter<select value={chapter} onChange={(event) => setChapter(event.target.value)}><option value="">All chapters</option>{chapters.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>;
 }
 export function Pager({ page, total, size, onChange }) {
