@@ -1,19 +1,17 @@
 import { useState, useEffect } from "react";
 import { FileUp } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "../../lib/supabase"; // Adjust your import path as needed
+import { supabase } from "../../lib/supabase"; 
 
 export default function RequisitionForm() {
     const navigate = useNavigate();
 
-    // 1. State for the doctor profile pulled from database
     const [doctor, setDoctor] = useState({
         id: "",
         full_name: "Loading...",
         din: ""
     });
 
-    // 2. State for form inputs
     const [patientName, setPatientName] = useState("");
     const [hospitalName, setHospitalName] = useState("The Medical City - Ortigas");
     const [clinicalDiagnosis, setClinicalDiagnosis] = useState("");
@@ -22,7 +20,6 @@ export default function RequisitionForm() {
     const [urgency, setUrgency] = useState("STAT / Emergency");
     const [slipFile, setSlipFile] = useState(null);
 
-    // Fetch the logged-in doctor's profile on component load
     useEffect(() => {
         async function fetchDoctorProfile() {
             try {
@@ -56,7 +53,6 @@ export default function RequisitionForm() {
         try {
             let slip_file_path = null;
 
-            // Optional: Upload the file if provided
             if (slipFile) {
                 const fileExt = slipFile.name.split('.').pop();
                 const fileName = `${Date.now()}_${Math.random().toString(36).substring(2)}.${fileExt}`;
@@ -68,18 +64,17 @@ export default function RequisitionForm() {
                 slip_file_path = uploadData.path;
             }
 
-            // Insert form data straight into the 'requisitions' table[cite: 5]
             const { error: insertError } = await supabase.from('requisitions').insert([
                 {
-                    physician_id: doctor.id || null, //[cite: 1, 5]
-                    patient_name: patientName,       //[cite: 5]
-                    hospital_name: hospitalName,     //[cite: 5]
-                    target_chapter: targetChapter,   //[cite: 5]
-                    component_needed: componentNeeded, //[cite: 5]
-                    units_req: 1,                    // default unit count[cite: 5]
-                    urgency: urgency,                //[cite: 5]
-                    status: 'Pending',               //[cite: 5]
-                    slip_file_path: slip_file_path   //[cite: 5]
+                    physician_id: doctor.id || null, 
+                    patient_name: patientName,     
+                    hospital_name: hospitalName,     
+                    target_chapter: targetChapter,   
+                    component_needed: componentNeeded, 
+                    units_req: 1,                    
+                    urgency: urgency,               
+                    status: 'Pending',              
+                    slip_file_path: slip_file_path  
                 }
             ]);
 
