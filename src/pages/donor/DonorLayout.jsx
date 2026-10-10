@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
-import { User as UserIcon } from "lucide-react";
 
 export default function DonorLayout() {
     const navigate = useNavigate();
@@ -44,7 +43,7 @@ export default function DonorLayout() {
         <div className="space-y-6">
             {/* Dynamic Welcome Header */}
             <div className="flex justify-between items-end mb-2">
-                <div>
+                <div className="flex w-full justify-between items-center pb-4">
                     <h2 className="text-xl font-black text-slate-900">
                         PRC Voluntary Donor Portal
                     </h2>
@@ -52,16 +51,6 @@ export default function DonorLayout() {
                         Home Branch: <strong>Rizal Chapter - Pasig</strong>
                     </p>
                 </div>
-                {profile && (
-                    <div className="flex items-center gap-2 text-xs font-bold text-slate-600 bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm">
-                        <UserIcon className="w-4 h-4 text-prc-red" />
-                        <span className="capitalize">{profile.full_name}</span>
-                        <span className="text-slate-300">|</span>
-                        <span className="uppercase text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">
-                            {profile.din || "NO-DIN"}
-                        </span>
-                    </div>
-                )}
             </div>
 
             {/* Persistent Top Navigation */}
