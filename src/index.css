@@ -1,0 +1,8 @@
+@import "tailwindcss";
+
+@theme {
+  --color-prc-red: #ED1B24;
+  --color-prc-darkred: #B91C1C;
+  --color-prc-lightred: #FEF2F2;
+  --color-prc-borderred: #FECACA;
+}
