@@ -25,6 +25,8 @@ The detailed table definitions/screenshots use `blood_units.isbt_barcode`, chapt
 
 Monthly boundaries use Philippine time (UTC+8), with an inclusive start and exclusive next-day end. Collections count existing units whose recorded collection date falls in the period. Chapter attribution uses current inventory location because the existing schema does not establish historical collection locations.
 
+The admin summaries accept both `Available` and the staff portal's `cleared` status as usable stock when expiry information exists. Dated audit transitions to `Dispensed` or `dispatched` count as recorded dispenses; `Discarded` or `culled` count as recorded discards. Current status alone does not establish a monthly outcome date.
+
 Dispenses and discards count distinct unit/outcome pairs only when a dated inventory audit snapshot evidences a status transition. A currently dispensed unit's collection date is not treated as its dispense date. When no usable outcome history exists, these totals display **Unavailable**. Recorded counts may be incomplete even when some transitions exist.
 
 Requests use `created_at`; requested units use `units_req`. Screening uses the latest dated test per unit within the period. Chapter screening uses units currently assigned to the chapter. Current stock uses today's available, unexpired units even when viewing a past month. Deleted units, historical chapter locations, and historical month-end balances cannot be reconstructed from incomplete existing records.

@@ -31,7 +31,7 @@ export function dayBounds(date) {
 }
 export function availableUnit(unit, now = Date.now()) {
     const expiry = new Date(unit.expiration_date).getTime();
-    return String(unit.status).toLowerCase() === "available" && Boolean(unit.expiration_date) && Number.isFinite(expiry) && expiry > now;
+    return ["available", "cleared"].includes(String(unit.status).toLowerCase()) && Boolean(unit.expiration_date) && Number.isFinite(expiry) && expiry > now;
 }
 function pageRange(page = 0) {
     if (!Number.isInteger(page) || page < 0 || page > 100000) throw new Error("Invalid page.");
@@ -135,7 +135,7 @@ export function supplySummary(units, chapters, now = Date.now()) {
     let unknownExpiry = 0;
     let invalidGroup = 0;
     for (const unit of units) {
-        if (String(unit.status).toLowerCase() !== "available") continue;
+        if (!["available", "cleared"].includes(String(unit.status).toLowerCase())) continue;
         if (!unit.expiration_date || !Number.isFinite(new Date(unit.expiration_date).getTime())) { unknownExpiry++; continue; }
         if (!availableUnit(unit, now)) continue;
         const group = bloodGroup(unit);
@@ -161,10 +161,10 @@ export function existingReport(units, requests, tests, logs, { start, end, chapt
         const after = log.new_data || {};
         const before = log.old_data || {};
         const status = String(after.status || "").toLowerCase();
-        if (!["dispensed", "discarded", "culled"].includes(status) || status === String(before.status || "").toLowerCase()) continue;
+        if (!["dispensed", "dispatched", "discarded", "culled"].includes(status) || status === String(before.status || "").toLowerCase()) continue;
         const unit = after.isbt_barcode || before.isbt_barcode || after.unit_id || before.unit_id;
         if (!unit || (chapter && (after.current_chapter || before.current_chapter) !== chapter)) continue;
-        const outcome = status === "dispensed" ? "dispensed" : "discarded";
+        const outcome = ["dispensed", "dispatched"].includes(status) ? "dispensed" : "discarded";
         datedOutcomes.set(`${unit}:${outcome}`, { outcome, component: componentName(after.component_type || before.component_type) });
     }
     // An empty audit table does not prove complete zero activity for a month.

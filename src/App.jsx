@@ -15,6 +15,7 @@ import InventoryLedger from "./pages/staff/InventoryLedger";
 import SerologicalEntry from "./pages/staff/SerologicalEntry";
 import TransferCoord from "./pages/staff/TransferCoord";
 import RequisitionForm from "./pages/physician/RequisitionForm";
+import Reports from "./pages/staff/Reports";
 import AuditLogs from "./pages/admin/AuditLogs";
 import AdminLayout from "./pages/admin/AdminLayout";
 import AdminReports from "./pages/admin/AdminReports";
@@ -24,46 +25,50 @@ import AdminSettings from "./pages/admin/AdminSettings";
 import AdminTransfers from "./pages/admin/AdminTransfers";
 import { Navigate } from "react-router-dom";
 
-// ... existing imports ...
-
 export default function App() {
     return (
         <BrowserRouter>
             <Routes>
+                {/* Public Routes */}
                 <Route path="/" element={<Login />} />
-                {/* Unauthenticated standalone view */}
                 <Route
                     path="/public-board"
                     element={<PublicBoard isNested={false} />}
                 />
 
+                {/* Protected Layout Routes (Top Nav with Profile Dropdown & Modal) */}
                 <Route element={<Layout />}>
+                    {/* Donor Portal */}
                     <Route path="/donor" element={<DonorLayout />}>
                         <Route index element={<DonorDashboard />} />
                         <Route path="book" element={<BookAppointment />} />
-                        {/* Nested Board Route */}
                         <Route
                             path="board"
                             element={<PublicBoard isNested={true} />}
                         />
                     </Route>
 
+                    {/* Staff Portal */}
                     <Route path="/staff" element={<StaffLayout />}>
                         <Route index element={<StaffDashboard />} />
                         <Route path="ledger" element={<InventoryLedger />} />
+                        <Route path="inventory" element={<InventoryLedger />} />
                         <Route path="serology" element={<SerologicalEntry />} />
+                        <Route path="testing" element={<SerologicalEntry />} />
                         <Route path="transfers" element={<TransferCoord />} />
-                        {/* Nested Board Route */}
+                        <Route path="reports" element={<Reports />} />
                         <Route
                             path="board"
                             element={<PublicBoard isNested={true} />}
                         />
                     </Route>
 
+                    {/* Physician Portal */}
                     <Route
                         path="/physician/request"
                         element={<RequisitionForm />}
                     />
+                    {/* Admin Portal */}
                     <Route path="/admin" element={<AdminLayout />}>
                         <Route index element={<Navigate to="audit" replace />} />
                         <Route path="audit" element={<AuditLogs />} />

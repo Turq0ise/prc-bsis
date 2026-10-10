@@ -16,6 +16,8 @@ async function mockBackend(page, profile = admin, options = {}) {
         serological_tests: [{ test_id: "test-1", unit_id: unit.isbt_barcode, final_result: "Passed", tested_at: current }],
         audit_logs: [event],
         transfers: [{ id: "transfer-test", requesting_chapter: "A", supplying_chapter: "B", component_needed: "PRBC", status: "Pending", requested_at: current }],
+        requests: [], transfer_requests: [], appointments: [],
+        chapters: [{ name: "Chapter A", category: "Permanent Chapters" }],
     };
     if (options.empty) for (const table of Object.keys(data)) if (table !== "profiles") data[table] = [];
     if (options.noOutcomes) data.audit_logs = [];
@@ -70,7 +72,8 @@ async function mockBackend(page, profile = admin, options = {}) {
         }
         const total = rows.length; const offset = Number(params.offset || 0); const limit = Number(params.limit || 1000);
         rows = rows.slice(offset, offset + limit);
-        await route.fulfill({ status: 200, contentType: "application/json", headers: { "content-range": `${offset}-${Math.max(offset, offset + rows.length - 1)}/${total}` }, body: JSON.stringify(rows) });
+        const single = request.headers().accept?.includes("application/vnd.pgrst.object+json");
+        await route.fulfill({ status: 200, contentType: "application/json", headers: { "content-range": `${offset}-${Math.max(offset, offset + rows.length - 1)}/${total}` }, body: JSON.stringify(single ? rows[0] || null : rows) });
     });
     return calls;
 }
@@ -118,6 +121,7 @@ test("admin reads existing tables, filters, exports, and has read-only accounts/
     await page.getByRole("link", { name: "Transfers", exact: true }).click(); await expect(page.getByRole("cell", { name: "Pending", exact: true })).toBeVisible();
     await page.getByRole("link", { name: "Portal settings", exact: true }).click(); await expect(page.getByRole("heading", { name: "Supply display guide" })).toBeVisible();
     await expect(page.getByRole("button", { name: /Save/ })).toHaveCount(0);
+    await page.getByRole("button", { name: "Open account menu" }).click();
     await page.getByRole("button", { name: "Sign Out" }).click(); await expect(page.getByRole("heading", { name: "Account Sign In" })).toBeVisible();
     readOnly(calls); expect(errors).toEqual([]);
 });
@@ -179,4 +183,48 @@ test("the simpler existing inventory schema has a working read-only fallback", a
     await expect(page.getByText(/Current stock unavailable:/)).toBeVisible();
     await expect(page.getByText(/Requisitions unavailable:/)).toBeVisible();
     await expect(page.getByRole("button", { name: "Export PDF" })).toBeVisible(); readOnly(calls);
+});
+
+test("main staff navigation reaches inventory, testing, transfers, and charts", async ({ page }) => {
+    const errors = []; page.on("pageerror", (error) => errors.push(error.message));
+    const calls = await mockBackend(page, { ...admin, full_name: "Test Staff Member", role: "staff" }, { empty: true }); await login(page);
+    await expect(page.getByRole("heading", { name: "PRC-BSIS Staff Command" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Branch Supply by Component" })).toBeVisible();
+    await page.getByRole("link", { name: "Inflow / Outflow Ledger" }).click();
+    await expect(page.getByRole("heading", { name: "Inventory Ledger" })).toBeVisible();
+    await page.getByRole("button", { name: "+ Log New Unit" }).click();
+    await expect(page.getByRole("heading", { name: "Log New Unit" })).toBeVisible();
+    await page.getByRole("button", { name: "Close new unit form" }).click();
+    await page.getByRole("link", { name: "Serological Testing" }).click();
+    await expect(page.getByRole("heading", { name: "Pending (0)", exact: true })).toBeVisible();
+    await page.getByRole("link", { name: "Transfer Coordination" }).click();
+    await expect(page.getByRole("heading", { name: "Inter-Chapter Transfer Coordination (UC-09)" })).toBeVisible();
+    await page.getByRole("link", { name: "Reports & Analytics" }).click();
+    await expect(page.getByRole("heading", { name: "Cleared Inventory Distribution" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Stock Levels" })).toBeVisible();
+    await page.screenshot({ path: "test-results/merged-staff-reports.png", fullPage: true });
+    expect(errors).toEqual([]); readOnly(calls);
+});
+
+test("main donor pages and guest booking remain available alongside admin", async ({ page }) => {
+    const errors = []; page.on("pageerror", (error) => errors.push(error.message));
+    const calls = await mockBackend(page, { ...admin, full_name: "Test Donor", role: "donor", din: "DIN-TEST", blood_group: "O+" }, { empty: true }); await login(page);
+    await expect(page.getByRole("heading", { name: "PRC Voluntary Donor Portal" })).toBeVisible();
+    await page.getByRole("button", { name: "Book Donation Slot" }).click();
+    await expect(page).toHaveURL(/\/donor\/book$/);
+    await expect(page.getByRole("heading", { name: "Schedule Donation Slot" })).toBeVisible();
+    await page.getByRole("button", { name: "Open account menu" }).click();
+    await page.getByRole("button", { name: "Sign Out", exact: true }).click();
+    await page.getByRole("button", { name: /Quick Guest Booking/ }).click();
+    await expect(page.getByRole("button", { name: "Confirm Guest Appointment" })).toBeVisible();
+    expect(errors).toEqual([]); readOnly(calls);
+});
+
+test("main physician form retains its signed-in profile", async ({ page }) => {
+    const errors = []; page.on("pageerror", (error) => errors.push(error.message));
+    const calls = await mockBackend(page, { ...admin, full_name: "Test Physician", role: "physician" }); await login(page);
+    await expect(page).toHaveURL(/\/physician\/request$/);
+    await expect(page.getByRole("heading", { name: "Submit Official Blood Requisition" })).toBeVisible();
+    await expect(page.getByText("Test Physician", { exact: true }).last()).toBeVisible();
+    expect(errors).toEqual([]); readOnly(calls);
 });

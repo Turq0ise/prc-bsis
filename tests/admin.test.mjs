@@ -77,6 +77,14 @@ test("CSV escapes formulas and quotes without turning unavailable counts into ze
     assert.equal(csvCell(0), '"0"');
 });
 
+test("staff cleared/dispatched statuses work in admin supply and recorded outcomes", () => {
+    const cleared = { ...unit, status: "cleared" };
+    assert.equal(supplySummary([cleared], [{ id: "A" }], now).total_available, 1);
+    const logs = [{ table_name: "blood_units", logged_at: "2026-10-02", old_data: cleared, new_data: { ...cleared, status: "dispatched" } }];
+    const report = existingReport([cleared], [], [], logs, period);
+    assert.equal(report.totals.dispensed, 1); assert.equal(report.totals.discarded, 0); assert.equal(report.totals.remaining, 1);
+});
+
 test("batch reads respect the actual server batch size and exact count", async () => {
     const data = Array.from({ length: 7 }, (_, id) => ({ id })); const starts = [];
     const rows = await readAll(() => ({ range(start) { starts.push(start); return Promise.resolve({ data: data.slice(start, start + 2), count: data.length }); } }));
