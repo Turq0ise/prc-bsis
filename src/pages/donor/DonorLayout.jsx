@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Outlet, useNavigate, useLocation } from "react-router-dom";
+import { Outlet, useNavigate, useLocation, Link } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 
 export default function DonorLayout() {
@@ -39,6 +39,13 @@ export default function DonorLayout() {
             </div>
         );
 
+    const navItems = [
+        { name: "Donor Dashboard", path: "/donor" },
+        { name: "Book Donation Slot", path: "/donor/book" },
+        // { name: "Active Medical Requests", path: "donor/requisitions"},
+        { name: "National Blood Board", path: "/donor/board" },
+    ];
+
     return (
         <div className="space-y-6">
             {/* Dynamic Welcome Header */}
@@ -54,38 +61,29 @@ export default function DonorLayout() {
             </div>
 
             {/* Persistent Top Navigation */}
-            <nav className="bg-white border border-slate-200 px-6 py-3 flex flex-wrap gap-6 text-xs font-semibold text-slate-600 rounded-xl shadow-sm">
-                <button
-                    onClick={() => navigate("/donor")}
-                    className={
-                        location.pathname === "/donor"
-                            ? "text-prc-red border-b-2 border-prc-red pb-1"
-                            : "hover:text-slate-900 transition"
-                    }
-                >
-                    Donor Dashboard
-                </button>
-                <button
-                    onClick={() => navigate("/donor/book")}
-                    className={
-                        location.pathname === "/donor/book"
-                            ? "text-prc-red border-b-2 border-prc-red pb-1"
-                            : "hover:text-slate-900 transition"
-                    }
-                >
-                    Book Donation Slot
-                </button>
-                <button
-                    onClick={() => navigate("/donor/board")}
-                    className={
-                        location.pathname === "/donor/board"
-                            ? "text-prc-red border-b-2 border-prc-red pb-1"
-                            : "hover:text-slate-900 transition"
-                    }
-                >
-                    National Blood Board
-                </button>
-            </nav>
+            <div className="bg-white border border-slate-200 rounded-xl shadow-sm px-2 flex overflow-x-auto">
+                {navItems.map((item) => {
+                    // Strict match for dashboard, startsWith match for nested routes
+                    const isActive =
+                        item.path === "/donor"
+                            ? location.pathname === "/donor"
+                            : location.pathname.startsWith(item.path);
+
+                    return (
+                        <Link
+                            key={item.name}
+                            to={item.path}
+                            className={`whitespace-nowrap px-4 py-4 text-sm font-bold border-b-2 transition ${
+                                isActive
+                                    ? "border-red-600 text-red-600"
+                                    : "border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300"
+                            }`}
+                        >
+                            {item.name}
+                        </Link>
+                    );
+                })}
+            </div>
 
             {/* Dynamic Page Content Renders Here */}
             <Outlet context={{ profile }} />
